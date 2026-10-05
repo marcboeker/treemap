@@ -1,0 +1,26 @@
+#!/bin/sh
+# treemap [path ...] - open folders in Treemap.app. Default path is ".".
+# Works from inside the app bundle (Contents/Resources/treemap) and through a symlink to it.
+
+dir=$(dirname "$(readlink -f "$0")")
+app=${dir%/Contents/Resources}
+if [ "$app" = "$dir" ] || [ ! -d "$app" ]; then
+    app=Treemap
+fi
+
+[ $# -gt 0 ] || set -- .
+
+for p in "$@"; do
+    if [ -d "$p" ]; then
+        abs=$(cd "$p" && pwd -P)
+    elif [ -e "$p" ]; then
+        abs=$(cd "$(dirname "$p")" && pwd -P)/$(basename "$p")
+    else
+        echo "treemap: no such file or directory: $p" >&2
+        exit 1
+    fi
+    shift
+    set -- "$@" "$abs"
+done
+
+exec open -a "$app" "$@"

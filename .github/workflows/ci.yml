@@ -1,0 +1,23 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # The app targets macOS 26. If the macos-26 runner image is not available to
+    # your account yet, use macos-latest and pick a matching Xcode with xcode-select.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Swift tests
+        run: make test
+
+      - name: Build app (unsigned)
+        run: make app SIGN=0
