@@ -10,22 +10,17 @@
 
 ---
 
-Your Mac says the disk is almost full, but you do not know why. You did not save 200 GB
-of files. So where did the space go?
+Your disk is almost full, and you do not know why. Usually it is not one big file. It is
+the things you forgot:
 
-Usually it is not one big file. It is the stuff you forgot about:
+- **Local LLM models.** Ollama, LM Studio and Hugging Face each keep their own copies.
+  80 GB of weights, and you use one model.
+- **Caches.** Browsers, Xcode, Docker and package managers write them. Few clean up.
+- **Leftovers.** Old installers, simulator images, phone backups, forgotten
+  `node_modules`.
 
-- **Local LLM models.** You tried Ollama, LM Studio and a few Hugging Face models. Each
-  tool keeps its own copy, in its own hidden folder. Now 80 GB of model weights sit on
-  your disk, and you use one of them.
-- **Caches that never get cleaned up.** Browsers, Xcode, Docker, package managers and
-  chat apps all write caches. Many apps forget to delete them. Some never stop growing.
-- **Old leftovers.** Installers in Downloads, simulator images, backups of a phone you
-  sold two years ago, a `node_modules` folder from a project you deleted.
-
-Finder does not help much here. It hides most of these folders and does not show folder
-sizes. Treemap shows all of it in one picture, so you can find the large items in seconds
-and delete them.
+Finder hides most of these folders and does not show folder sizes. Treemap shows
+everything in one picture. Find the big items in seconds, then delete them.
 
 <p align="center">
   <img src="assets/demo.gif" width="800" alt="Treemap demo">
@@ -46,25 +41,16 @@ the large blocks on the screen.
 
 ## Features
 
-- **Fast scan.** Treemap reads your disk in parallel. The map is ready to use while the
-  scan is still running, and it fills in live.
-- **One picture of everything.** Hidden folders, `~/Library`, caches and app data are all
-  visible. Nothing is skipped because Finder thinks you should not see it.
-- **Reclaim tray.** Collect items from different folders, check the total, then delete
-  them all together. Treemap tells you how much space you get back.
-- **Safe delete.** Items go to the Trash, never straight into oblivion. You confirm first,
-  and you can still put things back.
-- **Honest numbers.** Treemap counts the real space on disk. Files that share space (hard
-  links, APFS clones) are not counted twice, so the totals do not lie to you.
-- **Live updates.** When files change on disk, the map updates by itself. No need to
-  scan again.
-- **Quick Look and Finder.** Press Space to preview a file. Reveal it in Finder, open it,
-  or copy its path.
-- **Keyboard friendly.** Arrow keys to move, Return to zoom in, Esc to zoom out, Delete
-  to add to the tray.
-- **Command line.** Type `treemap ~/Downloads` in Terminal to open a folder directly
-  (install it from the **Treemap** menu).
-- **Native Mac app.** Made for macOS, fast on Apple silicon, no extra dependencies.
+- Fast parallel scan
+- Shows hidden folders too
+- Reclaim tray for batch delete
+- Deletes to Trash only
+- No double-counted APFS clones
+- Live updates on file changes
+- Quick Look and Finder integration
+- Full keyboard control
+- `treemap` command-line tool
+- Native Mac app
 
 ## Install
 
@@ -82,18 +68,31 @@ Or download `Treemap-macos.zip` from the
 [latest release](https://github.com/marcboeker/treemap/releases/latest), unzip it and
 move `Treemap.app` to your Applications folder.
 
+### Command line tool
+
+To install it, open Treemap and choose **Treemap > Install Command Line Tool…**. Treemap
+adds a `treemap` link in `/usr/local/bin`. If you cannot write to that folder, it uses
+`~/.local/bin`. No administrator password is necessary. If the folder is not on your
+`PATH`, Treemap shows the line to add to `~/.zshrc`.
+
+```sh
+treemap                  # open the current folder
+treemap ~/Downloads      # open one folder
+treemap ~/Library /opt   # open more than one folder
+```
+
+The link points into the app bundle, so it stays correct after app updates. If you move
+`Treemap.app`, install the tool again.
+
 ## First run: expect some permission dialogs
 
-macOS protects some of your folders. The first time Treemap scans them, macOS asks you
-for permission, sometimes a few times in a row (for example for Desktop, Documents,
-Downloads, external disks or data from other apps). This is normal. Treemap only reads
-file sizes and names. It does not open or upload your files.
+macOS asks for permission the first time Treemap scans protected folders, such as
+Desktop, Documents or external disks. This is normal. Treemap reads only file names and
+sizes.
 
-To see everything (Mail, Messages, Safari and other protected app data), give Treemap
-**Full Disk Access**. If it is missing, Treemap shows the protected folders as hatched
-"Unreadable" blocks and a banner with a shortcut to
-**System Settings > Privacy & Security > Full Disk Access**. Turn it on, then restart
-Treemap.
+To see everything, turn on **Full Disk Access** in
+**System Settings > Privacy & Security**, then restart Treemap. Without it, protected
+folders show as hatched "Unreadable" blocks.
 
 ## Good to know
 
@@ -104,17 +103,9 @@ Treemap.
 
 ## Under the hood
 
-- **Scanning with `getattrlistbulk`.** A pool of worker threads reads each directory
-  with one `getattrlistbulk` call per batch of entries, instead of one `stat` per file.
-  The workers publish their results into a shared tree, so the map can draw while the
-  scan continues.
-- **Squarified layout, drawn with Metal.** The layout uses the squarified treemap
-  algorithm, which keeps rectangles close to square and easy to compare. A Metal view
-  draws all cells and labels with instanced draw calls, with the labels taken from a
-  glyph atlas texture.
-- **Live updates with FSEvents.** An FSEvents stream watches the scanned folder. When
-  files change, Treemap scans only the changed directories again. It scans the full
-  folder again only if macOS drops events.
+- **Scan:** parallel worker threads with `getattrlistbulk`, not one `stat` per file.
+- **Render:** squarified layout, drawn with Metal instancing.
+- **Watch:** FSEvents, rescans only changed folders.
 
 ## Build from source
 
