@@ -28,9 +28,9 @@ sizes. Treemap shows all of it in one picture, so you can find the large items i
 and delete them.
 
 <p align="center">
-  <video src="assets/demo.mp4" width="800" autoplay loop muted playsinline>
-    <a href="assets/demo.mp4">Watch the demo (demo.mp4)</a>
-  </video>
+  <img src="assets/demo.gif" width="800" alt="Treemap demo">
+  <br>
+  <a href="assets/demo.mp4">Watch the full-quality video (MP4)</a>
 </p>
 
 ## How it works
