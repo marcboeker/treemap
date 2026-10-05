@@ -1,0 +1,79 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Test
+        run: swift test
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Build app bundle
+        run: make app SIGN=0
+
+      - name: Set version and sign ad-hoc
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          plutil -replace CFBundleShortVersionString -string "${VERSION}" build/Treemap.app/Contents/Info.plist
+          codesign --force --deep --identifier one.m8n.treemap --sign - build/Treemap.app
+
+      - name: Zip app bundle
+        run: |
+          cd build
+          ditto -c -k --keepParent Treemap.app Treemap-macos.zip
+
+      - name: Generate release notes
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)
+          {
+            echo "## Changes"
+            echo
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log "${PREVIOUS_TAG}..${GITHUB_REF_NAME}" --pretty=format:"- %s (%h)"
+            else
+              git log "${GITHUB_REF_NAME}" --pretty=format:"- %s (%h)"
+            fi
+            echo
+          } > "${RUNNER_TEMP}/release-notes.md"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            build/Treemap-macos.zip \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file "${RUNNER_TEMP}/release-notes.md"
+
+      - name: Update Homebrew cask
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          SHA256=$(shasum -a 256 build/Treemap-macos.zip | awk '{print $1}')
+
+          git fetch origin main
+          git checkout main
+
+          sed -i '' "s/^  version \".*\"\$/  version \"${VERSION}\"/" Casks/treemap.rb
+          sed -i '' "s/^  sha256 \".*\"\$/  sha256 \"${SHA256}\"/" Casks/treemap.rb
+
+          if ! git diff --quiet -- Casks/treemap.rb; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add Casks/treemap.rb
+            git commit -m "chore: update cask to ${GITHUB_REF_NAME}"
+            git push origin HEAD:main
+          fi
