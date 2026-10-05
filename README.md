@@ -74,6 +74,7 @@ With [Homebrew](https://brew.sh):
 
 ```sh
 brew tap marcboeker/treemap https://github.com/marcboeker/treemap
+brew trust --cask marcboeker/treemap/treemap
 brew install --cask treemap
 ```
 
@@ -100,6 +101,20 @@ Treemap.
 - The space you get back is shown as "up to X". APFS can share data between files and
   snapshots, so the real amount can be a little smaller.
 - A scan stays on one disk. Other disks show as grey blocks; open them in their own tab.
+
+## Under the hood
+
+- **Scanning with `getattrlistbulk`.** A pool of worker threads reads each directory
+  with one `getattrlistbulk` call per batch of entries, instead of one `stat` per file.
+  The workers publish their results into a shared tree, so the map can draw while the
+  scan continues.
+- **Squarified layout, drawn with Metal.** The layout uses the squarified treemap
+  algorithm, which keeps rectangles close to square and easy to compare. A Metal view
+  draws all cells and labels with instanced draw calls, with the labels taken from a
+  glyph atlas texture.
+- **Live updates with FSEvents.** An FSEvents stream watches the scanned folder. When
+  files change, Treemap scans only the changed directories again. It scans the full
+  folder again only if macOS drops events.
 
 ## Build from source
 
