@@ -219,8 +219,9 @@ final class TreemapMapView: MTKView {
         var anchor = [Int](repeating: -1, count: n)
         for i in 0..<n {
             if let id = new.cells[i].node, let o = oldIndex[id] {
-                let dh = (new.cells[i].flags.contains(.hasHeader) ? headerHeight : 0)
-                    - (old.cells[o].flags.contains(.hasHeader) ? headerHeight : 0)
+                // A displayed rect caught mid-tween can be shorter than a header: never go negative.
+                let dh = max((new.cells[i].flags.contains(.hasHeader) ? headerHeight : 0)
+                    - (old.cells[o].flags.contains(.hasHeader) ? headerHeight : 0), -oldRects[o].height)
                 from[i] = oldRects[o]
                 from[i].origin.y -= dh
                 from[i].size.height += dh
