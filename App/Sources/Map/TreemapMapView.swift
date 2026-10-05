@@ -219,7 +219,11 @@ final class TreemapMapView: MTKView {
         var anchor = [Int](repeating: -1, count: n)
         for i in 0..<n {
             if let id = new.cells[i].node, let o = oldIndex[id] {
+                let dh = (new.cells[i].flags.contains(.hasHeader) ? headerHeight : 0)
+                    - (old.cells[o].flags.contains(.hasHeader) ? headerHeight : 0)
                 from[i] = oldRects[o]
+                from[i].origin.y -= dh
+                from[i].size.height += dh
                 a0[i] = oldAlpha[o]
                 anchor[i] = i
             } else {
