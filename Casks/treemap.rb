@@ -1,6 +1,6 @@
 cask "treemap" do
-  version "0.1.0"
-  sha256 "1e1e82d5f76e76bc07c97246093dc321c12f50ed788a1d6ccfaf5259cfe9aca8"
+  version "0.1.1"
+  sha256 "8c114d240f0d06703971769165a3678965d6172770ca66db004fd346095b9d90"
 
   url "https://github.com/marcboeker/treemap/releases/download/v#{version}/Treemap-macos.zip"
   name "Treemap"
