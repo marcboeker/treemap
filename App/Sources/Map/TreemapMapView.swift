@@ -83,6 +83,10 @@ final class TreemapMapView: MTKView {
     private var ghosts: [Ghost] = []
     private var link: CADisplayLink?
     private var animProgress: Float = 1 // eased, for ghosts
+    /// Counts started animations, so the fallback can tell whether its animation still runs.
+    private var animGeneration = 0
+    /// Ticks of the current animation, for TREEMAP_DEBUG_DROP_TICKS.
+    private var animTicks = 0
 
     // MARK: Metal
 
@@ -170,6 +174,8 @@ final class TreemapMapView: MTKView {
     /// position (matched by NodeID) to the new one: zooming in/out takes ~250 ms, a live
     /// update of the same root 120 ms.
     func setLayout(_ new: TreemapLayout, animated: Bool) {
+        // Bring a running tween to the current time first: if ticks were late, displayRects is stale.
+        if anim != nil { applyAnimation(now: CACurrentMediaTime()) }
         let old = layout
         let oldRects = displayRects
         let oldIndex = indexByID
@@ -243,7 +249,21 @@ final class TreemapMapView: MTKView {
         }
         anim = Animation(start: CACurrentMediaTime(), duration: sameRoot ? 0.12 : 0.25, from: from, startAlpha: a0)
         applyAnimation(now: anim!.start)
+        animGeneration += 1
+        animTicks = 0
+        finishAnimationLate(generation: animGeneration, after: anim!.duration)
         return true
+    }
+
+    /// Fallback for missing display-link ticks: finishes an animation that still runs after its
+    /// end, so the map never stays half-tweened.
+    private func finishAnimationLate(generation: Int, after duration: CFTimeInterval) {
+        Task { [weak self] in
+            try? await Task.sleep(for: .seconds(duration + 0.05))
+            guard let self, animGeneration == generation, anim != nil else { return }
+            finishAnimation()
+            setNeedsRedraw()
+        }
     }
 
     private func applyAnimation(now: CFTimeInterval) {
@@ -285,6 +305,8 @@ final class TreemapMapView: MTKView {
     }
 
     @objc private func tick(_ link: CADisplayLink) {
+        animTicks += 1
+        if let n = DebugEnv.current.dropTicks, animTicks > n { return }
         applyAnimation(now: CACurrentMediaTime())
         render()
     }
@@ -467,10 +489,15 @@ final class TreemapMapView: MTKView {
     }
 
     private func render() {
-        guard layout != nil, let drawable = currentDrawable, let pass = currentRenderPassDescriptor,
-              let device else { return }
+        guard layout != nil, let device else { return }
         let t0 = CACurrentMediaTime()
+        // Take a frame slot before the drawable: then the semaphore, not a blocking
+        // nextDrawable, limits the frames in flight.
         inflight.wait()
+        guard let drawable = currentDrawable, let pass = currentRenderPassDescriptor else {
+            inflight.signal()
+            return
+        }
         slot = (slot + 1) % 3
         pass.colorAttachments[0].clearColor = palette.background
         pass.colorAttachments[0].loadAction = .clear

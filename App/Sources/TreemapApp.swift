@@ -72,6 +72,10 @@ struct DebugEnv: Sendable {
     let shot: Bool
     /// TREEMAP_NO_WATCH: no FSEvents live updates.
     let noWatch: Bool
+    /// TREEMAP_DEBUG_ZOOM_LOOP: after the scan, zoom into the largest child and back out, every 1.5 s.
+    let zoomLoop: Bool
+    /// TREEMAP_DEBUG_DROP_TICKS: ignore display-link ticks after this many per animation (simulates a stall).
+    let dropTicks: Int?
     /// TREEMAP_DEBUG: label statistics on stderr.
     let debug: Bool
     /// TREEMAP_STATS: frame statistics on stderr.
@@ -89,6 +93,8 @@ struct DebugEnv: Sendable {
         trash = env["TREEMAP_DEBUG_TRASH"]
         shot = env["TREEMAP_SHOT"] != nil
         noWatch = env["TREEMAP_NO_WATCH"] != nil
+        zoomLoop = env["TREEMAP_DEBUG_ZOOM_LOOP"] != nil
+        dropTicks = env["TREEMAP_DEBUG_DROP_TICKS"].flatMap { Int($0) }
         debug = env["TREEMAP_DEBUG"] != nil
         stats = env["TREEMAP_STATS"] != nil
         appearance = env["TREEMAP_APPEARANCE"]

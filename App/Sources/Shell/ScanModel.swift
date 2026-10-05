@@ -80,6 +80,7 @@ final class ScanModel {
     @ObservationIgnored private var layoutDirty = false
     @ObservationIgnored private var layoutAnimate = false
     @ObservationIgnored private var swipeMonitor: Any?
+    @ObservationIgnored private var zoomLoopStarted = false
     @ObservationIgnored private let quickLook = QuickLookController()
     @ObservationIgnored private var mapConfigured = false
     @ObservationIgnored lazy var map = TreemapMapView()
@@ -193,6 +194,21 @@ final class ScanModel {
             refreshDerived()
             requestLayout()
             if DebugEnv.current.state { applyDebugState() }
+            if DebugEnv.current.zoomLoop { startZoomLoop() }
+        }
+    }
+
+    /// Debug helper: zoom into the largest child of the root and back out, every 1.5 s.
+    private func startZoomLoop() {
+        guard !zoomLoopStarted, let s = session, let first = s.children(of: viewRoot).first else { return }
+        zoomLoopStarted = true
+        let top = viewRoot
+        Task { [weak self] in
+            while true {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard let self else { return }
+                if viewRoot == top { zoomIn(first) } else { zoomOut() }
+            }
         }
     }
 
