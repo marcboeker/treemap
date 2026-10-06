@@ -391,9 +391,9 @@ final class TreeBox: Sendable {
     init(_ tree: consuming Tree) { state = Mutex(tree) }
 }
 
-// MARK: LayoutTree
+// MARK: Layout queries
 
-extension Tree: LayoutTree {
+extension Tree {
     func name(of id: NodeID) -> String { nameString(id.raw) }
     func size(of id: NodeID) -> Int64 { size[Int(id.raw)] }
     func flags(of id: NodeID) -> CellFlags { CellFlags(rawValue: flags[Int(id.raw)] & Tree.publicMask) }
@@ -406,6 +406,7 @@ extension Tree: LayoutTree {
         var c = firstChild[Int(id.raw)]
         while c != Tree.none { body(NodeID(raw: c)); c = nextSibling[Int(c)] }
     }
+    /// Tie-breaker for equal sizes: true when `a`'s name sorts before `b`'s.
     func nameSortsBefore(_ a: NodeID, _ b: NodeID) -> Bool {
         let oa = Int(nameOffset[Int(a.raw)]), ob = Int(nameOffset[Int(b.raw)])
         return names[oa..<oa + Int(nameLength[Int(a.raw)])]

@@ -1,4 +1,4 @@
-// Squarified treemap layout (Bruls, Huizing, van Wijk) over a `LayoutTree`.
+// Squarified treemap layout (Bruls, Huizing, van Wijk) over a `Tree`.
 // Only visible cells are visited: a subtree whose rect is below `minCellArea` is never
 // walked, and tiny siblings collapse into one `.aggregate` cell.
 
@@ -10,14 +10,29 @@ public enum TreemapLayouter {
     public static let labelMinWidth: CGFloat = 30
     public static let labelMinHeight: CGFloat = 14
 
-    public static func layout(
-        tree: some LayoutTree, root: NodeID, bounds: CGRect,
+    static func layout(
+        tree: Tree, root: NodeID, bounds: CGRect,
         options: LayoutOptions
     ) -> TreemapLayout {
         var engine = Engine(tree: tree, options: options)
         engine.cells.reserveCapacity(4096)
         engine.run(root: root, bounds: bounds)
         return TreemapLayout(root: root, bounds: bounds, cells: engine.cells)
+    }
+
+    /// One root directory with a file per entry of `sizes` (node 0 is the root, entry `n` is node `n + 1`).
+    /// Public entry point for tools outside the module, e.g. make-icon.
+    public static func layout(fileSizes sizes: [Int64], bounds: CGRect, options: LayoutOptions) -> TreemapLayout {
+        var tree = Tree(rootName: "root", flags: .directory, scanning: false)
+        var batch = Batch()
+        for (i, s) in sizes.enumerated() {
+            let name = Array("t\(i + 1)".utf8)
+            batch.entries.append(.init(nameOffset: UInt32(batch.names.count), nameLength: UInt8(name.count), kind: .file,
+                                       multiLink: false, size: s, mtime: 0, dev: 0, ino: 0))
+            batch.names += name
+        }
+        _ = tree.publish(dir: 0, batch: batch, final: true)
+        return layout(tree: tree, root: NodeID(raw: 0), bounds: bounds, options: options)
     }
 
     /// Golden-ratio hue on the stable NodeID: neighboring ids land far apart on the color wheel.
@@ -35,7 +50,10 @@ private struct Item {
     var aggregateCount: Int32 // > 0: bucket of that many small items
 }
 
-private struct Engine<Tree: LayoutTree> {
+private struct Engine {
+    /// Stop recursing below this depth (relative to the view root).
+    static let maxDepth = 12
+
     let tree: Tree
     let options: LayoutOptions
     var cells: [TreemapCell] = []
@@ -62,7 +80,7 @@ private struct Engine<Tree: LayoutTree> {
     mutating func layoutDirectory(index: Int, id: NodeID, depth: Int, hue: Float, isRoot: Bool) {
         let rect = cells[index].rect
         let p = options.padding
-        guard depth < options.maxDepth,
+        guard depth < Self.maxDepth,
               rect.width > 2 * p, rect.height > 2 * p,
               (rect.width - 2 * p) * (rect.height - 2 * p) >= options.minCellArea
         else { return }

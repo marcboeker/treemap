@@ -117,6 +117,8 @@ make run       # build and launch
 make test      # run the tests
 ```
 
+For `make notarize`, set `NOTARY_IDENTITY` and `NOTARY_PROFILE` (and optionally `CODESIGN_IDENTITY`, `BUNDLE_ID`) in `.env`.
+
 ## License
 
 MIT, see [LICENSE](LICENSE).

@@ -47,7 +47,6 @@ final class LabelAtlas {
     private let ellipsis: [CTLine]
 
     /// Rasterised label count since creation (stats).
-    private(set) var rasterised = 0
 
     init(device: MTLDevice, scale: CGFloat) {
         self.device = device
@@ -131,7 +130,6 @@ final class LabelAtlas {
         CTLineDraw(line, ctx)
         guard let data = ctx.data else { return nil }
         texture.replace(region: MTLRegionMake2D(x, y, pw, ph), mipmapLevel: 0, withBytes: data, bytesPerRow: pw)
-        rasterised += 1
         return AtlasEntry(pixels: SIMD4(Float(x), Float(y), Float(pw), Float(ph)),
                           size: CGSize(width: CGFloat(pw) / scale, height: CGFloat(ph) / scale))
     }

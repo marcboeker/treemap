@@ -39,9 +39,6 @@ struct ScanWindowView: View {
                 window.tabbingIdentifier = "one.m8n.treemap.scan"
                 window.titleVisibility = .hidden
                 model.onRootGone = { [weak window] in window?.close() }
-                if DebugEnv.current.shot, let screen = window.screen ?? NSScreen.main {
-                    window.setFrame(NSRect(x: 100, y: screen.frame.maxY - 100 - 800, width: 1300, height: 800), display: true)
-                }
                 model.shutdown(whenClosing: window)
             })
             .task { model.start() }
@@ -260,7 +257,7 @@ struct StatusBar: View {
     @ViewBuilder private var text: some View {
         let p = model.progress
         if model.isScanning {
-            Text("scanning… \(Fmt.compact(p.files)) files · \(Fmt.compact(p.directories)) dirs · \(Fmt.bytes(p.bytes)) · \(p.currentPath)")
+            Text("scanning… \(p.files.formatted(.number.notation(.compactName))) files · \(p.directories.formatted(.number.notation(.compactName))) dirs · \(Fmt.bytes(p.bytes)) · \(p.currentPath)")
                 .monospacedDigit()
         } else if model.rescanCount > 0 {
             Text("rescanning…")

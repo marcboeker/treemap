@@ -4,20 +4,8 @@ import AppKit
 /// No privilege escalation: /usr/local/bin when the user can write there, else ~/.local/bin.
 @MainActor
 enum CommandLineTool {
-    struct Result {
-        var link: String
-        var directoryOnPath: Bool
-    }
-
-    enum Failure: LocalizedError {
-        case missingScript
-        case failed(String)
-        var errorDescription: String? {
-            switch self {
-            case .missingScript: "The command line tool is missing from the app bundle."
-            case .failed(let m): m
-            }
-        }
+    private struct InstallError: LocalizedError {
+        let errorDescription: String?
     }
 
     static func install() {
@@ -41,8 +29,8 @@ enum CommandLineTool {
         alert.runModal()
     }
 
-    private static func performInstall() throws -> Result {
-        guard let script = Bundle.main.url(forResource: "treemap", withExtension: nil) else { throw Failure.missingScript }
+    private static func performInstall() throws -> (link: String, directoryOnPath: Bool) {
+        guard let script = Bundle.main.url(forResource: "treemap", withExtension: nil) else { throw InstallError(errorDescription: "The command line tool is missing from the app bundle.") }
         let fm = FileManager.default
         let system = "/usr/local/bin"
         var isDir: ObjCBool = false
@@ -56,9 +44,9 @@ enum CommandLineTool {
             }
             try fm.createSymbolicLink(atPath: link, withDestinationPath: script.path)
             let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
-            return Result(link: link, directoryOnPath: dir == system || path.split(separator: ":").contains { String($0) == dir })
+            return (link, dir == system || path.split(separator: ":").contains { String($0) == dir })
         } catch {
-            throw Failure.failed("\(error.localizedDescription)\n\nTarget: \(dir)/treemap")
+            throw InstallError(errorDescription: "\(error.localizedDescription)\n\nTarget: \(dir)/treemap")
         }
     }
 }

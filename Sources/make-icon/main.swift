@@ -12,17 +12,6 @@ import ImageIO
 import TreemapCore
 import UniformTypeIdentifiers
 
-/// One root directory with a file per tile. Node 0 is the root, tile `n` is node `n + 1`.
-struct IconTree: LayoutTree {
-    let values: [Int64]
-    func name(of id: NodeID) -> String { "t\(id.raw)" }
-    func size(of id: NodeID) -> Int64 { id.raw == 0 ? values.reduce(0, +) : values[Int(id.raw) - 1] }
-    func flags(of id: NodeID) -> CellFlags { id.raw == 0 ? .directory : [] }
-    func children(of id: NodeID) -> [NodeID] {
-        id.raw == 0 ? (1...values.count).map { NodeID(raw: UInt32($0)) } : []
-    }
-}
-
 func hsb(_ h: CGFloat, _ s: CGFloat, _ b: CGFloat) -> CGColor {
     NSColor(hue: h - floor(h), saturation: s, brightness: b, alpha: 1).cgColor
 }
@@ -51,7 +40,7 @@ func render(pixels: Int) -> CGImage {
     options.padding = gap
     options.minCellArea = 1
     let bounds = CGRect(x: 0, y: 0, width: 1024, height: 1024).insetBy(dx: inset - gap / 2, dy: inset - gap / 2)
-    let layout = TreemapLayouter.layout(tree: IconTree(values: values), root: NodeID(raw: 0), bounds: bounds, options: options)
+    let layout = TreemapLayouter.layout(fileSizes: values, bounds: bounds, options: options)
     for cell in layout.cells.dropFirst() {
         guard let id = cell.node else { continue }
         let hue = hues[Int(id.raw) - 1]

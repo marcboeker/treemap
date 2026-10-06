@@ -3,32 +3,37 @@ import Foundation
 import Testing
 @testable import TreemapCore
 
-final class LayoutFixture: LayoutTree {
-    var names: [String] = []
-    var sizes: [Int64] = []
-    var flagList: [CellFlags] = []
-    var kids: [[NodeID]] = []
+final class LayoutFixture {
+    var tree = Tree(rootName: "root", flags: .directory, scanning: false)
+    private var started = false
 
     @discardableResult
     func add(_ name: String, size: Int64 = 0, flags: CellFlags = [], parent: NodeID? = nil) -> NodeID {
-        let id = NodeID(raw: UInt32(names.count))
-        names.append(name); sizes.append(size); flagList.append(flags); kids.append([])
-        if let parent { kids[Int(parent.raw)].append(id) }
-        return id
+        let id = UInt32(started ? tree.count : 0)
+        guard started else { started = true; return NodeID(raw: 0) } // first call is the root, already in `tree`
+        let bytes = Array(name.utf8)
+        let p = parent!.raw
+        tree.parent.append(p)
+        tree.firstChild.append(Tree.none)
+        tree.nextSibling.append(tree.firstChild[Int(p)])
+        tree.firstChild[Int(p)] = id
+        tree.nameOffset.append(UInt32(tree.names.count)); tree.nameLength.append(UInt8(bytes.count))
+        tree.names.append(contentsOf: bytes)
+        tree.size.append(size); tree.items.append(0); tree.dirs.append(0); tree.unreadable.append(0)
+        tree.mtime.append(0); tree.flags.append(flags.rawValue); tree.pending.append(0)
+        return NodeID(raw: id)
     }
     func dir(_ name: String, flags: CellFlags = [], parent: NodeID? = nil) -> NodeID {
         add(name, flags: flags.union(.directory), parent: parent)
     }
     /// Sum file sizes up into directories (unless a directory already has a size set).
     func finalize() {
-        for i in stride(from: names.count - 1, through: 0, by: -1) where !kids[i].isEmpty {
-            sizes[i] = kids[i].reduce(0) { $0 + sizes[Int($1.raw)] }
+        var acc = [Int64](repeating: 0, count: tree.count)
+        for i in stride(from: tree.count - 1, through: 0, by: -1) {
+            if tree.firstChild[i] != Tree.none { tree.size[i] = acc[i] }
+            if tree.parent[i] != Tree.none { acc[Int(tree.parent[i])] += tree.size[i] }
         }
     }
-    func name(of id: NodeID) -> String { names[Int(id.raw)] }
-    func size(of id: NodeID) -> Int64 { sizes[Int(id.raw)] }
-    func flags(of id: NodeID) -> CellFlags { flagList[Int(id.raw)] }
-    func children(of id: NodeID) -> [NodeID] { kids[Int(id.raw)] }
 }
 
 private let view = CGRect(x: 0, y: 0, width: 800, height: 600)
@@ -37,7 +42,7 @@ private func run(_ t: LayoutFixture, root: NodeID = NodeID(raw: 0), bounds: CGRe
                  _ tweak: (inout LayoutOptions) -> Void = { _ in }) -> TreemapLayout {
     var o = LayoutOptions()
     tweak(&o)
-    return TreemapLayouter.layout(tree: t, root: root, bounds: bounds, options: o)
+    return TreemapLayouter.layout(tree: t.tree, root: root, bounds: bounds, options: o)
 }
 
 private func sample() -> LayoutFixture {
@@ -159,8 +164,8 @@ private func sample() -> LayoutFixture {
     @Test func hueStableAcrossSizeReorder() {
         let t = sample()
         let before = run(t)
-        let a = t.kids[0][0], b = t.kids[0][1]
-        t.sizes[Int(a.raw)] = 1; t.sizes[Int(b.raw)] = 5_000_000
+        let a = NodeID(raw: t.tree.childIDs(0)[0]), b = NodeID(raw: t.tree.childIDs(0)[1])
+        t.tree.size[Int(a.raw)] = 1; t.tree.size[Int(b.raw)] = 5_000_000
         let after = run(t)
         for n in [a, b] {
             let h0 = before.cells.first { $0.node == n }!.hue
@@ -183,8 +188,8 @@ private func sample() -> LayoutFixture {
         t.add("f2", size: 600, parent: r)
         let s = t.dir("pending", flags: .scanning, parent: r)
         t.finalize()
-        t.sizes[Int(s.raw)] = 0
-        t.sizes[0] = 1000
+        t.tree.size[Int(s.raw)] = 0
+        t.tree.size[0] = 1000
         let l = run(t)
         let c = l.cells.first { $0.node == s }
         #expect(c != nil)
@@ -205,24 +210,14 @@ private func sample() -> LayoutFixture {
         #expect(!run(t).cells.contains { $0.name == "z" })
     }
 
-    @Test func maxDepthStops() {
-        let t = LayoutFixture()
-        var p = t.dir("root")
-        for i in 0..<8 { p = t.dir("d\(i)", parent: p) }
-        t.add("leaf", size: 100, parent: p)
-        t.finalize()
-        let l = run(t) { $0.maxDepth = 3 }
-        #expect(l.cells.map(\.depth).max() == 3)
-    }
-
     @Test func hitIndexMatchesLinearScan() {
         var seed: UInt64 = 0x2545F4914F6CDD1D
         func next() -> UInt64 { seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17; return seed }
         let t = LayoutFixture()
         _ = t.dir("root")
         var i = 0
-        while t.names.count < 20_000 && i < t.names.count {
-            if t.flagList[i].contains(.directory) {
+        while t.tree.count < 20_000 && i < t.tree.count {
+            if CellFlags(rawValue: t.tree.flags[i]).contains(.directory) {
                 for k in 0..<(2 + Int(next() % 20)) {
                     let isDir = next() % 4 == 0
                     t.add("n\(k)", size: isDir ? 0 : Int64(next() % 100_000 + 1),
@@ -255,14 +250,12 @@ private func sample() -> LayoutFixture {
         func next() -> UInt64 { seed ^= seed << 13; seed ^= seed >> 7; seed ^= seed << 17; return seed }
         let t = LayoutFixture()
         let total = 1_000_000
-        t.names.reserveCapacity(total); t.sizes.reserveCapacity(total)
-        t.flagList.reserveCapacity(total); t.kids.reserveCapacity(total)
         _ = t.dir("root")
         var i = 0
-        while t.names.count < total && i < t.names.count {
-            if t.flagList[i].contains(.directory) {
+        while t.tree.count < total && i < t.tree.count {
+            if CellFlags(rawValue: t.tree.flags[i]).contains(.directory) {
                 let n = 2 + Int(next() % 30)
-                for k in 0..<n where t.names.count < total {
+                for k in 0..<n where t.tree.count < total {
                     let isDir = next() % 4 == 0
                     let id = t.add("n\(k)", size: isDir ? 0 : Int64(next() % 1_000_000 + 1),
                                    flags: isDir ? .directory : [], parent: NodeID(raw: UInt32(i)))
@@ -278,7 +271,7 @@ private func sample() -> LayoutFixture {
         for _ in 0..<5 {
             var l: TreemapLayout?
             let elapsed = ContinuousClock().measure {
-                l = TreemapLayouter.layout(tree: t, root: NodeID(raw: 0), bounds: bounds, options: LayoutOptions())
+                l = TreemapLayouter.layout(tree: t.tree, root: NodeID(raw: 0), bounds: bounds, options: LayoutOptions())
             }
             best = min(best, elapsed / .milliseconds(1)); count = l?.cells.count ?? 0
         }

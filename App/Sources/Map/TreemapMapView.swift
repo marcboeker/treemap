@@ -2,7 +2,6 @@ import AppKit
 import MetalKit
 import QuartzCore
 import TreemapCore
-import os
 
 /// Metal treemap view. Draws one instanced quad per cell plus label bitmaps from a glyph
 /// atlas, on demand (never continuously, except while an animation runs).
@@ -85,8 +84,6 @@ final class TreemapMapView: MTKView {
     private var animProgress: Float = 1 // eased, for ghosts
     /// Counts started animations, so the fallback can tell whether its animation still runs.
     private var animGeneration = 0
-    /// Ticks of the current animation, for TREEMAP_DEBUG_DROP_TICKS.
-    private var animTicks = 0
 
     // MARK: Metal
 
@@ -104,7 +101,6 @@ final class TreemapMapView: MTKView {
     private var slot = 0
     private let inflight = DispatchSemaphore(value: 3)
     private var palette: MapPalette
-    private let stats = FrameStats.fromEnvironment()
 
     // MARK: Input state
 
@@ -255,7 +251,6 @@ final class TreemapMapView: MTKView {
         anim = Animation(start: CACurrentMediaTime(), duration: sameRoot ? 0.12 : 0.25, from: from, startAlpha: a0)
         applyAnimation(now: anim!.start)
         animGeneration += 1
-        animTicks = 0
         finishAnimationLate(generation: animGeneration, after: anim!.duration)
         return true
     }
@@ -310,8 +305,6 @@ final class TreemapMapView: MTKView {
     }
 
     @objc private func tick(_ link: CADisplayLink) {
-        animTicks += 1
-        if let n = DebugEnv.current.dropTicks, animTicks > n { return }
         applyAnimation(now: CACurrentMediaTime())
         render()
     }
@@ -327,7 +320,6 @@ final class TreemapMapView: MTKView {
             if atlas.epoch == epoch { break }
         }
         labelItems = items
-        if DebugEnv.current.debug { FileHandle.standardError.write(Data("labels=\(items.count) of \(cells.filter { $0.flags.contains(.showsLabel) }.count) rasterised=\(atlas.rasterised) scale=\(atlas.scale)\n".utf8)) }
     }
 
     private func buildLabelItems(_ cells: [TreemapCell]) -> [LabelItem] {
@@ -495,7 +487,6 @@ final class TreemapMapView: MTKView {
 
     private func render() {
         guard layout != nil, let device else { return }
-        let t0 = CACurrentMediaTime()
         // Take a frame slot before the drawable: then the semaphore, not a blocking
         // nextDrawable, limits the frames in flight.
         inflight.wait()
@@ -557,13 +548,7 @@ final class TreemapMapView: MTKView {
         enc.endEncoding()
         cmd.present(drawable)
         let sem = inflight
-        let stats = stats
-        let cpuMs = (CACurrentMediaTime() - t0) * 1000
-        let instances = base.cellCount + base.labelCount + no
-        cmd.addCompletedHandler { cb in
-            sem.signal()
-            stats?.record(cpuMs: cpuMs, gpuMs: (cb.gpuEndTime - cb.gpuStartTime) * 1000, instances: instances)
-        }
+        cmd.addCompletedHandler { _ in sem.signal() }
         cmd.commit()
     }
 
@@ -681,27 +666,4 @@ final class TreemapMapView: MTKView {
     override func moveDown(_ sender: Any?) { onKeyCommand?(.move(.down)) }
     override func cancelOperation(_ sender: Any?) { onKeyCommand?(.cancel) }
     override func insertNewline(_ sender: Any?) { onKeyCommand?(.enter) }
-}
-
-/// Optional frame statistics, enabled with TREEMAP_STATS=1; printed to stderr every 120 frames.
-final class FrameStats: @unchecked Sendable {
-    private let lock = OSAllocatedUnfairLock()
-    private var frames = 0
-    private var cpu = 0.0, gpu = 0.0, maxCpu = 0.0, maxGpu = 0.0
-    private var instances = 0
-
-    static func fromEnvironment() -> FrameStats? {
-        DebugEnv.current.stats ? FrameStats() : nil
-    }
-
-    func record(cpuMs: Double, gpuMs: Double, instances n: Int) {
-        let line: String? = lock.withLock {
-            frames += 1; cpu += cpuMs; gpu += gpuMs; maxCpu = max(maxCpu, cpuMs); maxGpu = max(maxGpu, gpuMs); instances = n
-            guard frames >= 120 else { return nil }
-            defer { frames = 0; cpu = 0; gpu = 0; maxCpu = 0; maxGpu = 0 }
-            return String(format: "frames=120 instances=%d cpu avg %.3f ms max %.3f | gpu avg %.3f ms max %.3f",
-                          instances, cpu / 120, maxCpu, gpu / 120, maxGpu)
-        }
-        if let line { FileHandle.standardError.write(Data((line + "\n").utf8)) }
-    }
 }

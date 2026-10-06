@@ -8,7 +8,7 @@ import CoreGraphics
 /// Stable id of a node inside one scan session. Survives size updates and subtree rescans
 /// (a rescanned node and its descendants keep their ids while their paths still exist);
 /// a removed node's id is never reused within a session.
-public struct NodeID: Hashable, Sendable, Codable {
+public struct NodeID: Hashable, Sendable {
     public let raw: UInt32
     public init(raw: UInt32) { self.raw = raw }
 }
@@ -63,8 +63,6 @@ public struct LayoutOptions: Sendable, Hashable {
     /// Cells smaller than this area (pt²) are not emitted; their parent shows them
     /// as one `.aggregate` cell instead.
     public var minCellArea: CGFloat = 12
-    /// Stop recursing below this depth (relative to the view root).
-    public var maxDepth: Int = 12
     /// Hidden items still count in sizes, but are skipped in the drawing when false.
     public var drawHidden: Bool = true
 
@@ -90,29 +88,4 @@ public struct ScanProgress: Sendable, Hashable {
     public var currentPath: String = ""
     public var finished: Bool = false
     public init() {}
-}
-
-/// Read-only view of a tree that the layouter needs. ScanSession's tree conforms to it;
-/// tests use a small in-memory fixture. Calls happen on one thread at a time.
-public protocol LayoutTree {
-    func name(of id: NodeID) -> String
-    /// Allocated bytes of the node and everything below it (lower bound while scanning).
-    func size(of id: NodeID) -> Int64
-    /// Only `.directory`, `.hidden`, `.scanning`, `.mountPoint`, `.unreadable` are read.
-    func flags(of id: NodeID) -> CellFlags
-    /// Direct children, any order. Empty for files and for dirs not read yet.
-    func children(of id: NodeID) -> [NodeID]
-    /// Calls `body` for each direct child. The layouter uses this; the default calls `children(of:)`.
-    func forEachChild(of id: NodeID, _ body: (NodeID) -> Void)
-    /// Tie-breaker for equal sizes: true when `a`'s name sorts before `b`'s. The default compares `name(of:)`.
-    func nameSortsBefore(_ a: NodeID, _ b: NodeID) -> Bool
-}
-
-extension LayoutTree {
-    public func forEachChild(of id: NodeID, _ body: (NodeID) -> Void) {
-        for c in children(of: id) { body(c) }
-    }
-    public func nameSortsBefore(_ a: NodeID, _ b: NodeID) -> Bool {
-        name(of: a) < name(of: b)
-    }
 }

@@ -1,4 +1,4 @@
-# Native macOS app. Signing settings come from .env (see .env.example).
+# Native macOS app. Signing settings come from .env (see README).
 # SIGN=0 builds the app without code signing (used by CI).
 
 SHELL := /bin/bash
@@ -32,7 +32,7 @@ hdiutil create -volname Treemap -srcfolder build/dmg -ov -format UDZO $(DMG)
 rm -rf build/dmg
 endef
 
-.PHONY: all app run test project dmg notarize check-notary install icon clean
+.PHONY: all app run test project dmg notarize install icon clean
 
 all: app
 
@@ -61,14 +61,12 @@ dmg: app
 	$(make_dmg)
 	@echo "built $(DMG)"
 
-check-notary:
-	@test -n "$(NOTARY_IDENTITY)" || { echo "error: NOTARY_IDENTITY is not set. Put a Developer ID Application identity in .env (see .env.example)."; exit 1; }
-	@test -n "$(NOTARY_PROFILE)" || { echo "error: NOTARY_PROFILE is not set. Create one with 'xcrun notarytool store-credentials' and put its name in .env."; exit 1; }
-
 # Developer ID signing, notarization and stapling. Needs NOTARY_IDENTITY (Developer ID
 # Application certificate) and NOTARY_PROFILE (notarytool keychain profile) in .env.
 # Hardened runtime and entitlements come from App/project.yml.
-notarize: check-notary
+notarize:
+	@test -n "$(NOTARY_IDENTITY)" || { echo "error: NOTARY_IDENTITY is not set. Put a Developer ID Application identity in .env."; exit 1; }
+	@test -n "$(NOTARY_PROFILE)" || { echo "error: NOTARY_PROFILE is not set. Create one with 'xcrun notarytool store-credentials' and put its name in .env."; exit 1; }
 	@$(MAKE) --no-print-directory app CODESIGN_IDENTITY="$(NOTARY_IDENTITY)" \
 		XCODEBUILD_SETTINGS=OTHER_CODE_SIGN_FLAGS=--timestamp
 	codesign --verify --strict --verbose=2 $(APP_BUNDLE)

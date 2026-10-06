@@ -4,9 +4,6 @@ import TreemapCore
 enum Fmt {
     static func bytes(_ n: Int64) -> String { n.formatted(.byteCount(style: .file)) }
 
-    /// "412k", "1.2M" for counters.
-    static func compact(_ n: Int64) -> String { n.formatted(.number.notation(.compactName)) }
-
     /// Size with a "≥" prefix while the node is still being walked.
     static func size(_ info: NodeInfo) -> String {
         (info.flags.contains(.scanning) ? "≥ " : "") + bytes(info.size)

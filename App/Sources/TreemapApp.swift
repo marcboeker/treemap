@@ -27,11 +27,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var openedExternally = false
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        switch DebugEnv.current.appearance {
-        case "dark": NSApp.appearance = NSAppearance(named: .darkAqua)
-        case "light": NSApp.appearance = NSAppearance(named: .aqua)
-        default: break
-        }
         // `make run ARGS=/path` and `TREEMAP_ROOT` pass the folder as an argument or variable.
         var paths = CommandLine.arguments.dropFirst().filter { !$0.hasPrefix("-") && $0.hasPrefix("/") }
         if let r = DebugEnv.current.root { paths.append(r) }
@@ -59,45 +54,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { true }
 }
 
-/// Debug and screenshot switches from `TREEMAP_*` environment variables, read once.
-/// Flags are on when the variable is set, whatever its value.
+/// Debug switches from `TREEMAP_*` environment variables, read once.
 struct DebugEnv: Sendable {
-    /// TREEMAP_DEBUG_STATE: after the scan, select the largest child and tray the next two.
-    let state: Bool
-    /// TREEMAP_DEBUG_ZOOM: with `state`, also zoom into the selection.
-    let zoom: Bool
-    /// TREEMAP_DEBUG_TRASH: with `state`, "sheet" opens the trash sheet, "confirm" also confirms it.
-    let trash: String?
-    /// TREEMAP_SHOT: fixed window frame for screenshots.
-    let shot: Bool
-    /// TREEMAP_NO_WATCH: no FSEvents live updates.
-    let noWatch: Bool
-    /// TREEMAP_DEBUG_ZOOM_LOOP: after the scan, zoom into the largest child and back out, every 1.5 s.
-    let zoomLoop: Bool
-    /// TREEMAP_DEBUG_DROP_TICKS: ignore display-link ticks after this many per animation (simulates a stall).
-    let dropTicks: Int?
-    /// TREEMAP_DEBUG: label statistics on stderr.
-    let debug: Bool
-    /// TREEMAP_STATS: frame statistics on stderr.
-    let stats: Bool
-    /// TREEMAP_APPEARANCE: "dark" or "light".
-    let appearance: String?
     /// TREEMAP_ROOT: folder to open at launch.
     let root: String?
+    /// TREEMAP_NO_WATCH: no FSEvents live updates (set, whatever its value).
+    let noWatch: Bool
 
     static let current = DebugEnv(ProcessInfo.processInfo.environment)
 
     init(_ env: [String: String]) {
-        state = env["TREEMAP_DEBUG_STATE"] != nil
-        zoom = env["TREEMAP_DEBUG_ZOOM"] != nil
-        trash = env["TREEMAP_DEBUG_TRASH"]
-        shot = env["TREEMAP_SHOT"] != nil
-        noWatch = env["TREEMAP_NO_WATCH"] != nil
-        zoomLoop = env["TREEMAP_DEBUG_ZOOM_LOOP"] != nil
-        dropTicks = env["TREEMAP_DEBUG_DROP_TICKS"].flatMap { Int($0) }
-        debug = env["TREEMAP_DEBUG"] != nil
-        stats = env["TREEMAP_STATS"] != nil
-        appearance = env["TREEMAP_APPEARANCE"]
         root = env["TREEMAP_ROOT"]
+        noWatch = env["TREEMAP_NO_WATCH"] != nil
     }
 }
