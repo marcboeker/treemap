@@ -17,7 +17,7 @@ typedef struct {
     simd_float4 rect;    // x, y, w, h in view points (origin top-left)
     simd_float4 fill;    // straight (non-premultiplied) rgba
     simd_float4 border;  // straight rgba
-    simd_float4 params;  // x: border width (pt), y: mode (kCellMode*)
+    simd_float4 params;  // x: border width (pt), y: mode (kCellMode*), z: bloom 0...1, w: corner radius (pt)
 } CellInstance;
 
 /// One label bitmap from the glyph atlas.

@@ -62,7 +62,7 @@ final class TreemapMapView: MTKView {
         var anchor: Anchor
         var dx: Float
         var dy: Float
-        var secondary: Bool
+        var color: SIMD4<Float>
         var dim: Bool
     }
 
@@ -179,7 +179,8 @@ final class TreemapMapView: MTKView {
         let oldAlpha = displayAlpha
 
         layout = new
-        styles = new.cells.map { palette.style(for: $0) }
+        let heat = HeatScale(cells: new.cells)
+        styles = new.cells.map { palette.style(for: $0, heat: heat) }
         indexByID = Dictionary(uniqueKeysWithValues: new.cells.enumerated().compactMap { i, c in c.node.map { ($0, i) } })
         hitIndex = CellHitIndex(cells: new.cells)
         displayRects = new.cells.map(\.rect)
@@ -332,16 +333,18 @@ final class TreemapMapView: MTKView {
             let dim = st.dimLabel
             if st.hasHeader {
                 guard r.width > 24, r.height >= 10 else { continue }
+                // Header row: name left, size right; below the top rule when there is one.
                 let hh = min(headerHeight, r.height)
-                var nameMax = r.width - 12
-                if let s = atlas.entry(Fmt.bytes(c.size), style: .size, maxWidth: r.width - 12), r.width - 12 > s.size.width + 36 {
-                    nameMax = r.width - 12 - s.size.width - 6
-                    items.append(LabelItem(cell: Int32(i), entry: s, anchor: .right, dx: 5,
-                                           dy: Float((hh - s.size.height) / 2), secondary: true, dim: dim))
+                let rule: CGFloat = st.topRule ? 1 : 0
+                var nameMax = r.width - 14
+                if let s = atlas.entry(Fmt.bytes(c.size), style: .size, maxWidth: r.width - 14), r.width - 14 > s.size.width + 36 {
+                    nameMax = r.width - 14 - s.size.width - 8
+                    items.append(LabelItem(cell: Int32(i), entry: s, anchor: .right, dx: 7,
+                                           dy: Float((hh - s.size.height) / 2 + rule), color: st.subtext, dim: dim))
                 }
-                if let e = atlas.entry(c.name, style: .dirName, maxWidth: nameMax) {
-                    items.append(LabelItem(cell: Int32(i), entry: e, anchor: .left, dx: 5,
-                                           dy: Float((hh - e.size.height) / 2), secondary: false, dim: dim))
+                if let e = atlas.entry(c.name, style: c.depth == 1 ? .topDirName : .dirName, maxWidth: nameMax) {
+                    items.append(LabelItem(cell: Int32(i), entry: e, anchor: .left, dx: 7,
+                                           dy: Float((hh - e.size.height) / 2 + rule), color: st.text, dim: dim))
                 }
             } else {
                 guard r.height >= nameH + 2, r.width > 20 else { continue }
@@ -349,10 +352,10 @@ final class TreemapMapView: MTKView {
                 let total = showSize ? nameH + sizeH : nameH
                 let y0 = (r.height - total) / 2
                 if let e = atlas.entry(c.name, style: .fileName, maxWidth: r.width - 8) {
-                    items.append(LabelItem(cell: Int32(i), entry: e, anchor: .center, dx: 0, dy: Float(y0), secondary: false, dim: dim))
+                    items.append(LabelItem(cell: Int32(i), entry: e, anchor: .center, dx: 0, dy: Float(y0), color: st.text, dim: dim))
                 }
                 if showSize, let s = atlas.entry(Fmt.bytes(c.size), style: .size, maxWidth: r.width - 8) {
-                    items.append(LabelItem(cell: Int32(i), entry: s, anchor: .center, dx: 0, dy: Float(y0 + nameH), secondary: true, dim: dim))
+                    items.append(LabelItem(cell: Int32(i), entry: s, anchor: .center, dx: 0, dy: Float(y0 + nameH), color: st.subtext, dim: dim))
                 }
             }
         }
@@ -368,32 +371,35 @@ final class TreemapMapView: MTKView {
 
     override func draw(_ dirtyRect: NSRect) { render() }
 
-    /// Cells (+ header strips, + ghosts) at their displayed rects. Returns the instance count.
+    /// Cells (+ top rules, + ghosts) at their displayed rects. Returns the instance count.
     private func encodeBase(_ cp: UnsafeMutablePointer<CellInstance>) -> Int {
         guard let cells = layout?.cells else { return 0 }
         var nc = 0
-        func put(_ r: CGRect, _ s: CellStyle, _ alpha: Float, header: Bool) {
-            if header {
+        func put(_ r: CGRect, _ s: CellStyle, _ alpha: Float, rule: Bool) {
+            if rule {
+                // 2 pt rule along the top edge, inside the rim.
                 let inset = CGFloat(s.borderWidth)
-                let h = min(headerHeight, r.height) - inset
+                let h = min(2, r.height - 2 * inset)
                 guard h > 0, r.width > 2 * inset else { return }
                 cp[nc] = CellInstance(
                     rect: SIMD4(Float(r.minX + inset), Float(r.minY + inset), Float(r.width - 2 * inset), Float(h)),
-                    fill: SIMD4(s.header.x, s.header.y, s.header.z, alpha), border: .zero, params: SIMD4(0, kCellModeNormal, 0, 0))
+                    fill: SIMD4(s.header.x, s.header.y, s.header.z, s.header.w * alpha), border: .zero,
+                    params: SIMD4(0, kCellModeNormal, 0, 1))
             } else {
                 var b = s.border; b.w *= alpha
                 cp[nc] = CellInstance(
                     rect: SIMD4(Float(r.minX), Float(r.minY), Float(r.width), Float(r.height)),
-                    fill: SIMD4(s.fill.x, s.fill.y, s.fill.z, alpha), border: b, params: SIMD4(s.borderWidth, s.mode, 0, 0))
+                    fill: SIMD4(s.fill.x, s.fill.y, s.fill.z, alpha), border: b,
+                    params: SIMD4(s.borderWidth, s.mode, s.bloom, s.radius))
             }
             nc += 1
         }
-        for g in ghosts { put(g.rect, g.style, 1 - animProgress, header: false) }
+        for g in ghosts { put(g.rect, g.style, 1 - animProgress, rule: false) }
         for i in 0..<cells.count {
             let r = displayRects[i]
             if r.width < 0.4 || r.height < 0.4 { continue }
-            put(r, styles[i], displayAlpha[i], header: false)
-            if styles[i].hasHeader { put(r, styles[i], displayAlpha[i], header: true) }
+            put(r, styles[i], displayAlpha[i], rule: false)
+            if styles[i].topRule { put(r, styles[i], displayAlpha[i], rule: true) }
         }
         return nc
     }
@@ -402,7 +408,6 @@ final class TreemapMapView: MTKView {
     private func encodeLabels(_ lp: UnsafeMutablePointer<LabelInstance>, scale: Float) -> Int {
         var nl = 0
         let inv = 1 / scale
-        let primary = palette.textPrimary, secondary = palette.textSecondary
         for item in labelItems {
             let ci = Int(item.cell)
             guard ci < displayRects.count else { continue }
@@ -419,7 +424,7 @@ final class TreemapMapView: MTKView {
             var y = Float(r.minY) + item.dy
             x = (x * scale).rounded() * inv
             y = (y * scale).rounded() * inv
-            var color = item.secondary ? secondary : primary
+            var color = item.color
             color.w *= alpha * (item.dim ? 0.5 : 1)
             lp[nl] = LabelInstance(dst: SIMD4(x, y, w, h), uv: item.entry.pixels, color: color,
                                    clip: SIMD4(Float(r.minX), Float(r.minY), Float(r.maxX), Float(r.maxY)))
@@ -436,7 +441,7 @@ final class TreemapMapView: MTKView {
             let r = displayRects[i]
             guard r.width >= 1, r.height >= 1 else { return }
             cp[nc] = CellInstance(rect: SIMD4(Float(r.minX), Float(r.minY), Float(r.width), Float(r.height)),
-                                  fill: fill, border: border, params: SIMD4(width, mode, 0, 0))
+                                  fill: fill, border: border, params: SIMD4(width, mode, 0, styles[i].radius))
             nc += 1
         }
         let tc = palette.trayColor
@@ -565,7 +570,10 @@ final class TreemapMapView: MTKView {
         super.viewDidChangeEffectiveAppearance()
         palette = MapPalette(appearance: effectiveAppearance)
         clearColor = palette.background
-        if let cells = layout?.cells { styles = cells.map { palette.style(for: $0) } }
+        if let cells = layout?.cells {
+            let heat = HeatScale(cells: cells)
+            styles = cells.map { palette.style(for: $0, heat: heat) }
+        }
         if layout != nil { planLabels() }
         invalidateStatic()
         setNeedsRedraw()
@@ -655,6 +663,9 @@ final class TreemapMapView: MTKView {
     }
 
     override func keyDown(with event: NSEvent) {
+        // AppKit offers only modified keys to the main menu, so plain-key menu shortcuts
+        // (Space, ⌫, ↩) arrive here. Give them to the menu first.
+        if NSApp.mainMenu?.performKeyEquivalent(with: event) == true { return }
         interpretKeyEvents([event])
     }
 

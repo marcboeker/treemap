@@ -3,7 +3,7 @@ import CoreText
 import Metal
 
 enum LabelStyle: UInt8 {
-    case dirName, fileName, size
+    case dirName, fileName, size, topDirName
 }
 
 /// A rasterised label inside the atlas texture.
@@ -55,7 +55,7 @@ final class LabelAtlas {
         func font(_ size: CGFloat, _ weight: NSFont.Weight) -> CTFont {
             NSFont.systemFont(ofSize: size * scale, weight: weight) as CTFont
         }
-        fonts = [font(11.5, .semibold), font(11, .medium), font(10, .regular)]
+        fonts = [font(11, .semibold), font(11.5, .semibold), font(10.5, .medium), font(12.5, .bold)]
         ellipsis = fonts.map { f in
             CTLineCreateWithAttributedString(NSAttributedString(string: "\u{2026}", attributes: Self.attrs(f)))
         }

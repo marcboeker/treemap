@@ -10,7 +10,7 @@ struct CellOut {
     float2 size;
     float4 fill [[flat]];
     float4 border [[flat]];
-    float2 params [[flat]];
+    float4 params [[flat]];
 };
 
 static float2 corner(uint vid) { return float2(vid & 1, vid >> 1); }
@@ -27,14 +27,19 @@ vertex CellOut cellVertex(uint vid [[vertex_id]], uint iid [[instance_id]],
     o.size = c.rect.zw;
     o.fill = c.fill;
     o.border = c.border;
-    o.params = c.params.xy;
+    o.params = c.params;
     return o;
 }
 
 fragment float4 cellFragment(CellOut in [[stage_in]], constant MapUniforms &u [[buffer(1)]]) {
     float px = 1.0 / u.scale;
     float2 p = in.local;
-    float d = min(min(p.x, p.y), min(in.size.x - p.x, in.size.y - p.y));
+    // Distance inside the rounded rect (negative outside).
+    float r = min(in.params.w, 0.5 * min(in.size.x, in.size.y));
+    float2 half_ = in.size * 0.5;
+    float2 q = abs(p - half_) - half_ + r;
+    float d = r - length(max(q, 0.0)) - min(max(q.x, q.y), 0.0);
+    float edge = saturate(d / px + 0.5);
     float bw = in.params.x;
     float mode = in.params.y;
 
@@ -55,6 +60,12 @@ fragment float4 cellFragment(CellOut in [[stage_in]], constant MapUniforms &u [[
         rgb = mix(rgb, in.border.rgb, dot * 0.35);
     }
 
+    if (in.params.z > 0.0) {
+        // Bloom: white glow from the center, gone at 70 % of the long side.
+        float g = saturate(1.0 - length(p - half_) / (max(in.size.x, in.size.y) * 0.7));
+        rgb = mix(rgb, float3(1.0), in.params.z * g);
+    }
+
     if (mode == kCellModeBadge) {
         // Right triangle with the right angle at the top-right; soft diagonal edge.
         float e = (in.size.x - p.x) + p.y - in.size.x;   // < 0 inside
@@ -62,8 +73,9 @@ fragment float4 cellFragment(CellOut in [[stage_in]], constant MapUniforms &u [[
         a *= saturate((in.size.y - p.y) / px + 0.5);
     }
 
+    a *= edge;
     float cov = (bw > 0.0) ? saturate((bw - d) / px + 0.5) : 0.0;
-    float ba = cov * in.border.a;
+    float ba = cov * in.border.a * edge;
     float4 f = float4(rgb * a, a);
     float4 b = float4(in.border.rgb * ba, ba);
     return b + f * (1.0 - ba);

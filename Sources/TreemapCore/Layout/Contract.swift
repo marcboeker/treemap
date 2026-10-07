@@ -57,9 +57,9 @@ public struct TreemapCell: Sendable, Hashable {
 
 public struct LayoutOptions: Sendable, Hashable {
     /// Gap between sibling cells and between a parent's edge and its children.
-    public var padding: CGFloat = 2
+    public var padding: CGFloat = 3
     /// Height of a directory's label header strip.
-    public var headerHeight: CGFloat = 16
+    public var headerHeight: CGFloat = 18
     /// Cells smaller than this area (pt²) are not emitted; their parent shows them
     /// as one `.aggregate` cell instead.
     public var minCellArea: CGFloat = 12
