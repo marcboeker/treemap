@@ -22,6 +22,8 @@ the things you forgot:
 Finder hides most of these folders and does not show folder sizes. Treemap shows
 everything in one picture. Find the big items in seconds, then delete them.
 
+<img src="assets/cover.png" width="100%" alt="Treemap showing a scanned home folder, with a selected model file in the Reclaim tray">
+
 <p align="center">
   <img src="assets/demo.gif" width="800" alt="Treemap demo">
   <br>
