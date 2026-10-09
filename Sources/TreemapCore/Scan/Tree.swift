@@ -1,6 +1,7 @@
 // Arena storage for the scanned tree. Struct-of-arrays indexed by `NodeID.raw`.
 // Ids are append-only: a removed node stays in the arrays (marked dead) so its id is
 // never reused inside one session. Not thread safe by itself: `TreeBox` guards it.
+// ponytail: dead nodes are never freed (~70 B per file a live rescan replaces); a long-running window on a churning folder grows until it is closed. Compacting needs an id remap, which breaks stable NodeIDs.
 
 import Synchronization
 
@@ -22,7 +23,7 @@ struct Tree: Sendable {
     var firstChild = ContiguousArray<UInt32>()
     var nextSibling = ContiguousArray<UInt32>()
     var nameOffset = ContiguousArray<UInt32>()
-    var nameLength = ContiguousArray<UInt8>()
+    var nameLength = ContiguousArray<UInt16>()
     /// Allocated bytes of the node and everything below it.
     var size = ContiguousArray<Int64>()
     /// Files (non-directories) at or below the node; 1 for a file.
@@ -51,10 +52,10 @@ struct Tree: Sendable {
         if rootName.utf8.first == 0x2E { f |= CellFlags.hidden.rawValue }
         let isDir = rootFlags.contains(.directory)
         if scanning && isDir { f |= CellFlags.scanning.rawValue }
-        let bytes = Array(rootName.utf8.prefix(255))
+        let bytes = Array(rootName.utf8)
         names.append(contentsOf: bytes)
         parent.append(Tree.none); firstChild.append(Tree.none); nextSibling.append(Tree.none)
-        nameOffset.append(0); nameLength.append(UInt8(bytes.count))
+        nameOffset.append(0); nameLength.append(UInt16(bytes.count))
         size.append(rootSize); items.append(isDir ? 0 : 1); mtime.append(rootMTime)
         dirs.append(isDir ? 1 : 0); unreadable.append(rootFlags.contains(.unreadable) ? 1 : 0)
         flags.append(f); pending.append(scanning && isDir ? 1 : 0)
@@ -397,11 +398,6 @@ extension Tree {
     func name(of id: NodeID) -> String { nameString(id.raw) }
     func size(of id: NodeID) -> Int64 { size[Int(id.raw)] }
     func flags(of id: NodeID) -> CellFlags { CellFlags(rawValue: flags[Int(id.raw)] & Tree.publicMask) }
-    func children(of id: NodeID) -> [NodeID] {
-        var out: [NodeID] = []
-        forEachChild(of: id) { out.append($0) }
-        return out
-    }
     func forEachChild(of id: NodeID, _ body: (NodeID) -> Void) {
         var c = firstChild[Int(id.raw)]
         while c != Tree.none { body(NodeID(raw: c)); c = nextSibling[Int(c)] }
@@ -421,7 +417,7 @@ struct Batch: Sendable {
     enum Kind: UInt8, Sendable { case file, walk, mount }
     struct Entry: Sendable {
         var nameOffset: UInt32
-        var nameLength: UInt8
+        var nameLength: UInt16
         var kind: Kind
         var multiLink: Bool
         var size: Int64

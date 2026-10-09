@@ -17,7 +17,7 @@ final class LayoutFixture {
         tree.firstChild.append(Tree.none)
         tree.nextSibling.append(tree.firstChild[Int(p)])
         tree.firstChild[Int(p)] = id
-        tree.nameOffset.append(UInt32(tree.names.count)); tree.nameLength.append(UInt8(bytes.count))
+        tree.nameOffset.append(UInt32(tree.names.count)); tree.nameLength.append(UInt16(bytes.count))
         tree.names.append(contentsOf: bytes)
         tree.size.append(size); tree.items.append(0); tree.dirs.append(0); tree.unreadable.append(0)
         tree.mtime.append(0); tree.flags.append(flags.rawValue); tree.pending.append(0)

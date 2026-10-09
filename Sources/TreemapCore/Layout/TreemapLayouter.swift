@@ -27,7 +27,7 @@ public enum TreemapLayouter {
         var batch = Batch()
         for (i, s) in sizes.enumerated() {
             let name = Array("t\(i + 1)".utf8)
-            batch.entries.append(.init(nameOffset: UInt32(batch.names.count), nameLength: UInt8(name.count), kind: .file,
+            batch.entries.append(.init(nameOffset: UInt32(batch.names.count), nameLength: UInt16(name.count), kind: .file,
                                        multiLink: false, size: s, mtime: 0, dev: 0, ino: 0))
             batch.names += name
         }

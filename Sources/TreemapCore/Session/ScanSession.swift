@@ -6,7 +6,7 @@
 // `Mutex` or an atomic, so every method can be called from any thread, and the App can
 // call the read APIs synchronously. Only `rescan` is `async` (it waits for a walk).
 //
-// Volume rules (see also PLAN.md): the walk stays on the root's volume. A directory on
+// Volume rules: the walk stays on the root's volume. A directory on
 // another device, flagged as mount point or as automount trigger becomes a `.mountPoint`
 // leaf. Scanning "/" on a modern macOS shows the Data volume through APFS firmlinks
 // (/Users, /Applications, ...) and again under /System/Volumes/Data. We count it once:
@@ -235,10 +235,6 @@ public final class ScanSession: Sendable {
     /// The deepest node on the way from the root to `path`: `path` itself when it is in the
     /// tree, else its closest ancestor that is. The descent stops at a mount point. `path` may
     /// start with `rootPath` or `rootRealPath`; nil for paths outside the root.
-    public func deepestNode(atPath path: String) -> NodeID? {
-        deepestNodeAndFlags(atPath: path)?.id
-    }
-
     func deepestNodeAndFlags(atPath path: String) -> (id: NodeID, flags: CellFlags)? {
         let p = PathUtil.normalized(path)
         guard let rel = PathUtil.relative(p, to: rootPath) ?? PathUtil.relative(p, to: rootRealPath)
@@ -297,11 +293,6 @@ public final class ScanSession: Sendable {
         return removed
     }
 
-    /// Walks the subtree of `id` again and swaps it in. See `rescan(_ ids: [NodeID])`.
-    public func rescan(_ id: NodeID) async {
-        await rescan([id])
-    }
-
     /// Walks the subtrees of `ids` again, in one parallel walk, and swaps each in; ancestors get
     /// the size delta. Every node that still exists keeps its id; only new entries get new ids.
     /// A path that vanished removes its node. Ids below another id of the list are skipped.
@@ -309,7 +300,9 @@ public final class ScanSession: Sendable {
         let targets = topLevel(ids)
         guard !targets.isEmpty else { return }
         let (entries, seed) = box.state.withLock { t in
-            (targets.map { (id: $0, path: t.path(of: $0.raw, rootPath: rootPath), name: t.nameString($0.raw)) },
+            // Mount points are other volumes: leave them out.
+            (targets.filter { !t.flags(of: $0).contains(.mountPoint) }
+                .map { (id: $0, path: t.path(of: $0.raw, rootPath: rootPath), name: t.nameString($0.raw)) },
              t.linksForRescan(of: targets.map(\.raw)))
         }
 
@@ -325,9 +318,9 @@ public final class ScanSession: Sendable {
             } else if !st.isDirectory {
                 leaves.append((e.id, .leaf(named: e.name, stat: st)))
             } else {
-                let bytes = Array(e.name.utf8.prefix(255))
+                let bytes = Array(e.name.utf8)
                 batch.entries.append(Batch.Entry(
-                    nameOffset: UInt32(batch.names.count), nameLength: UInt8(bytes.count), kind: .walk,
+                    nameOffset: UInt32(batch.names.count), nameLength: UInt16(bytes.count), kind: .walk,
                     multiLink: false, size: 0, mtime: st.mtimeSeconds, dev: st.st_dev, ino: 0))
                 batch.names.append(contentsOf: bytes)
                 walks.append((e.id, e.path))

@@ -46,8 +46,6 @@ final class LabelAtlas {
     private let fonts: [CTFont]
     private let ellipsis: [CTLine]
 
-    /// Rasterised label count since creation (stats).
-
     init(device: MTLDevice, scale: CGFloat) {
         self.device = device
         self.scale = scale

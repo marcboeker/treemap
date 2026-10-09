@@ -27,7 +27,7 @@ everything in one picture. Find the big items in seconds, then delete them.
 <p align="center">
   <img src="assets/demo.gif" width="800" alt="Treemap demo">
   <br>
-  <a href="assets/demo.mp4">Watch the full-quality video (MP4)</a>
+  <a href="assets/demo-1080p.mp4">Watch the full-quality video (MP4)</a>
 </p>
 
 ## How it works

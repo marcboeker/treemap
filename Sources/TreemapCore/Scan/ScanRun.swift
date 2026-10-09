@@ -290,6 +290,8 @@ final class ScanRun: @unchecked Sendable {
             var mountStatus: UInt32 = 0
             var nlink: UInt32 = 1
             var alloc: Int64 = 0
+            // getattrlistbulk(2): ATTR_CMN_ERROR comes right after RETURNED_ATTRS, before NAME.
+            if retCommon & A.cmnError != 0 { err = f.loadUnaligned(as: UInt32.self); f += 4 }
             if retCommon & A.cmnName != 0 {
                 let off = Int(f.loadUnaligned(as: Int32.self))
                 nameLen = max(0, Int(f.loadUnaligned(fromByteOffset: 4, as: UInt32.self)) - 1)
@@ -300,12 +302,11 @@ final class ScanRun: @unchecked Sendable {
             if retCommon & A.cmnObjType != 0 { objType = f.loadUnaligned(as: UInt32.self); f += 4 }
             if retCommon & A.cmnModTime != 0 { mtime = f.loadUnaligned(as: Int64.self); f += 16 }
             if retCommon & A.cmnFileID != 0 { ino = f.loadUnaligned(as: UInt64.self); f += 8 }
-            if retCommon & A.cmnError != 0 { err = f.loadUnaligned(as: UInt32.self); f += 4 }
             if retDir & A.dirMountStatus != 0 { mountStatus = f.loadUnaligned(as: UInt32.self); f += 4 }
             if retFile & A.fileLinkCount != 0 { nlink = f.loadUnaligned(as: UInt32.self); f += 4 }
             if retFile & A.fileAllocSize != 0 { alloc = f.loadUnaligned(as: Int64.self); f += 8 }
 
-            guard let nameStart, nameLen > 0, nameLen <= 255 else { continue }
+            guard let nameStart, nameLen > 0, nameLen <= 1023 else { continue }
             if err != 0 {
                 counters.errors.add(1, ordering: .relaxed)
                 continue
@@ -324,7 +325,7 @@ final class ScanRun: @unchecked Sendable {
                 }
             }
             batch.entries.append(Batch.Entry(
-                nameOffset: offset, nameLength: UInt8(nameLen), kind: kind,
+                nameOffset: offset, nameLength: UInt16(nameLen), kind: kind,
                 multiLink: kind == .file && nlink > 1, size: kind == .file ? alloc : 0,
                 mtime: mtime, dev: dev, ino: ino))
         }

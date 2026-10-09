@@ -171,7 +171,7 @@ func duBytes(_ path: String) throws -> Int64 {
         #expect(s.remove([s.rootID]).isEmpty)
         // Ids are not reused.
         try f.file("a/new", bytes: 10)
-        await s.rescan(s.node(atPath: f.path("a"))!)
+        await s.rescan([s.node(atPath: f.path("a"))!])
         let newID = try #require(s.node(atPath: f.path("a/new")))
         #expect(newID.raw > b.raw)
     }
@@ -187,7 +187,7 @@ func duBytes(_ path: String) throws -> Int64 {
         try FileManager.default.removeItem(atPath: f.path("a/old"))
         try f.file("a/added1", bytes: 400_000)
         try f.file("a/added2", bytes: 20_000)
-        await s.rescan(a)
+        await s.rescan([a])
         #expect(s.node(atPath: f.path("a")) == a)
         #expect(s.node(atPath: f.path("a/old")) == nil)
         #expect(s.node(atPath: f.path("a/sub/deep")) != nil)
@@ -198,7 +198,7 @@ func duBytes(_ path: String) throws -> Int64 {
         #expect(!s.info(a)!.flags.contains(.scanning))
         // Vanished path removes the node.
         try FileManager.default.removeItem(atPath: f.path("a"))
-        await s.rescan(a)
+        await s.rescan([a])
         #expect(s.info(a) == nil)
         #expect(s.info(s.rootID)!.size == (try duBytes(f.root.path)))
     }
@@ -225,7 +225,7 @@ func duBytes(_ path: String) throws -> Int64 {
         try FileManager.default.removeItem(atPath: f.path("a/gone"))
         try FileManager.default.removeItem(atPath: f.path("a/sub/gone2"))
         try f.file("a/sub/new", bytes: 30_000)
-        await s.rescan(a)
+        await s.rescan([a])
 
         #expect(s.node(atPath: f.path("a")) == a)
         #expect(s.node(atPath: f.path("a/keep")) == keep)
@@ -247,7 +247,7 @@ func duBytes(_ path: String) throws -> Int64 {
             #expect(hues[c.node!] == c.hue)
         }
         // A second rescan with no changes keeps every id.
-        await s.rescan(a)
+        await s.rescan([a])
         #expect(s.node(atPath: f.path("a/sub/new")) == new)
         #expect(s.node(atPath: f.path("a/keep")) == keep)
     }
@@ -291,9 +291,9 @@ func duBytes(_ path: String) throws -> Int64 {
         try f.dir("y")
         #expect(link(orig, f.path("y/l")) == 0)
         let s = await f.scan()
-        await s.rescan(s.node(atPath: f.path("y"))!)
+        await s.rescan([s.node(atPath: f.path("y"))!])
         #expect(s.info(s.rootID)!.size == (try duBytes(f.root.path)))
-        await s.rescan(s.node(atPath: f.path("x"))!)
+        await s.rescan([s.node(atPath: f.path("x"))!])
         #expect(s.info(s.rootID)!.size == (try duBytes(f.root.path)))
     }
 
@@ -395,8 +395,25 @@ func duBytes(_ path: String) throws -> Int64 {
         if let data = s.node(atPath: "/System/Volumes/Data") {
             #expect(s.info(data)!.flags.contains(.mountPoint))
             #expect(s.children(of: data).isEmpty)
+            s.cancel()
+            await s.waitUntilFinished()
+            await s.rescan([data])  // must not walk the other volume
+            #expect(s.children(of: data).isEmpty)
+            #expect(s.info(data)!.flags.contains(.mountPoint))
+        } else {
+            s.cancel()
+            await s.waitUntilFinished()
         }
-        s.cancel()
-        await s.waitUntilFinished()
+    }
+
+    @Test func longNamesAreKept() async throws {
+        let f = try Fixture()
+        let n = String(repeating: "あ", count: 100)  // 300 UTF-8 bytes
+        try f.file(n, bytes: 1_000)
+        try f.file("d/\(n)/\(n)", bytes: 2_000)
+        let s = await f.scan()
+        #expect(s.node(atPath: f.path(n)) != nil)
+        #expect(s.node(atPath: f.path("d/\(n)/\(n)")) != nil)
+        #expect(s.info(s.rootID)!.size >= 3_000)
     }
 }

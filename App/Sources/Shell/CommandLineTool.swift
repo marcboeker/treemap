@@ -36,17 +36,23 @@ enum CommandLineTool {
         var isDir: ObjCBool = false
         let systemUsable = fm.fileExists(atPath: system, isDirectory: &isDir) && isDir.boolValue && fm.isWritableFile(atPath: system)
         let dir = systemUsable ? system : NSHomeDirectory() + "/.local/bin"
+        let link = dir + "/treemap"
         do {
             try fm.createDirectory(atPath: dir, withIntermediateDirectories: true)
-            let link = dir + "/treemap"
             if (try? fm.destinationOfSymbolicLink(atPath: link)) != nil || fm.fileExists(atPath: link) {
+                // Only replace a previous Treemap install (possibly from a moved app).
+                guard let dest = try? fm.destinationOfSymbolicLink(atPath: link), dest.hasSuffix("/Contents/Resources/treemap") else {
+                    throw InstallError(errorDescription: "\(link) already exists and is not Treemap's. Remove it or rename it, then try again.")
+                }
                 try fm.removeItem(atPath: link)
             }
             try fm.createSymbolicLink(atPath: link, withDestinationPath: script.path)
             let path = ProcessInfo.processInfo.environment["PATH"] ?? ""
             return (link, dir == system || path.split(separator: ":").contains { String($0) == dir })
+        } catch let error as InstallError {
+            throw error
         } catch {
-            throw InstallError(errorDescription: "\(error.localizedDescription)\n\nTarget: \(dir)/treemap")
+            throw InstallError(errorDescription: "\(error.localizedDescription)\n\nTarget: \(link)")
         }
     }
 }

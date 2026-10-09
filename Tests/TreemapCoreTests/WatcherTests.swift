@@ -54,8 +54,8 @@ import Testing
         #expect(w.nearestNode(for: "/elsewhere/x") == nil)
         #expect(Set(s.topLevel([a, c, d])) == [a, d])
         #expect(s.topLevel([c, a, c, d]).count == 2)
-        #expect(s.deepestNode(atPath: f.path("a/b/c/new/deeper")) == c)
-        #expect(s.deepestNode(atPath: f.path("ab")) == s.rootID)
+        #expect(s.deepestNodeAndFlags(atPath: f.path("a/b/c/new/deeper"))?.id == c)
+        #expect(s.deepestNodeAndFlags(atPath: f.path("ab"))?.id == s.rootID)
     }
 
     @Test func rootGoneIsReported() async throws {
